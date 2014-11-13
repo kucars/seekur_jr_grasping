@@ -1,4 +1,4 @@
-Seekur Jr Grasping Pipeline
-==================
+grasping
+========
 
-Grasping Pipeline for Seekur Jr
+Grasping related packages
