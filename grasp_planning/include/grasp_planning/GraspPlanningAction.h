@@ -124,7 +124,7 @@ private:
     double collision_delta;
 //    std::map<std::string, moveit_msgs::CollisionObject> collision_objects;
     std::vector<moveit_msgs::CollisionObject> collision_objects;
-    Eigen::Affine3d transform_end_effector_to_palm;
+    Eigen::Affine3d transform_end_effector_to_wrist;
 
     ros::NodeHandle nh_;
     actionlib::SimpleActionServer<ist_grasp_generation_msgs::GenerateTrajectoriesAction> as_;

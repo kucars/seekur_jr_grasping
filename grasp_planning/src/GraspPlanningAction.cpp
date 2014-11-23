@@ -9,37 +9,37 @@ GraspPlanningAction::GraspPlanningAction(std::string name) : as_(nh_, name, fals
     //subscribe to the data topic of interest
     as_.start();
 
-    group.setPoseReferenceFrame("base_link");
+    group.setPoseReferenceFrame("base_link"); // it may affect the execution change it to base link *************************************
     //group.setEndEffectorLink("palm_frame");
-    group.setEndEffectorLink("end_effector");
+    group.setEndEffectorLink("wrist_roll_link");
 
     // (Optional) Create a publisher for visualizing plans in Rviz.
     display_publisher = nh_.advertise<moveit_msgs::DisplayTrajectory>("/move_group/display_planned_path", 1, true);
 
-
+//******************changed the palm frame to wrist roll link ***********************************
 
     tf::TransformListener listener;
-    tf::StampedTransform end_effector_palm_transform;
+    tf::StampedTransform end_effector_wrist_transform;
     //object_to_grasp.state.graspable_object.potential_models[0].pose.pose;
 
     try
     {
         ros::Time now = ros::Time::now();
-        listener.waitForTransform("palm_frame", "end_effector",
+        listener.waitForTransform("wrist_roll_link", "end_effector",
                                   ros::Time(0), ros::Duration(3.0));
 
-        listener.lookupTransform("palm_frame", "end_effector",
-                                 ros::Time(0), end_effector_palm_transform);
+        listener.lookupTransform("wrist_roll_link", "end_effector",
+                                 ros::Time(0), end_effector_wrist_transform);
 
     }
     catch (tf::TransformException ex)
     {
         ROS_ERROR("%s",ex.what());
     }
-    tf::transformTFToEigen(end_effector_palm_transform, transform_end_effector_to_palm);
+    tf::transformTFToEigen(end_effector_wrist_transform, transform_end_effector_to_wrist);
 
-    close_gripper_client = nh_.serviceClient<std_srvs::Empty>("close_gripper");
-    open_gripper_client = nh_.serviceClient<std_srvs::Empty>("open_gripper");
+    close_gripper_client = nh_.serviceClient<std_srvs::Empty>("/terabot_arm/close_gripper");
+    open_gripper_client = nh_.serviceClient<std_srvs::Empty>("/terabot_arm/open_gripper");
     add_object_collision_server =  nh_.advertiseService("add_objects_collision", &GraspPlanningAction::objectsToCollisionEnvironment, this);
     attached_object_publisher = nh_.advertise<moveit_msgs::AttachedCollisionObject>("attached_collision_object", 1);
 }
@@ -62,7 +62,10 @@ void GraspPlanningAction::goalCB()
 
         listener.lookupTransform("base_link", object_to_grasp.collision_name,
                                  ros::Time(0), transform);
-        std::cout << transform.getOrigin().getX() << std::endl;
+        std::cout << "TRANSFORM X: "<< transform.getOrigin().getX() << std::endl;
+	std::cout << "TRANSFORM Y: "<< transform.getOrigin().getY() << std::endl;
+	std::cout << "TRANSFORM Z: "<< transform.getOrigin().getZ() << std::endl;
+	std::cout << "object collision name: "<< object_to_grasp.collision_name << std::endl;
 
     }
     catch (tf::TransformException ex)
@@ -77,6 +80,7 @@ void GraspPlanningAction::goalCB()
     moveit::planning_interface::MoveGroup::Plan my_plan;
 
     ist_msgs::GripList grip_list=goal_->grip_list;
+    //group.setGoalPositionTolerance(0.5);
     group.setPlanningTime(0.5);
     ist_msgs::GripState chosen_grip;
 
@@ -87,7 +91,7 @@ void GraspPlanningAction::goalCB()
 
         tf::poseMsgToEigen(grip_list.grip_states[i].hand_state.grasp_pose.pose.pose,transform_grip_eigen);
 
-        Eigen::Affine3d final_transform = transform_object_eigen*transform_grip_eigen*transform_end_effector_to_palm;
+        Eigen::Affine3d final_transform = transform_object_eigen*transform_grip_eigen*transform_end_effector_to_wrist;
 
         static tf::TransformBroadcaster br;
         tf::Transform transform;
@@ -95,16 +99,27 @@ void GraspPlanningAction::goalCB()
         tf::Quaternion q;
         q.setRPY(0, 0, 0);
         transform.setRotation(q);
-        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", "gripper_pose"));
+        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "base_link", "gripper_pose"));
 
         //std::cout << final_transform.matrix() << std::endl;
-        group.setPoseTarget(final_transform);
-
+        //group.setPoseTarget(final_transform);
+	geometry_msgs::Pose fixed_pose;
+        geometry_msgs::Quaternion quat_msg;
+	fixed_pose.position.x = transform.getOrigin().getX()-0.09;
+        fixed_pose.position.y =  transform.getOrigin().getY();
+        fixed_pose.position.z =  transform.getOrigin().getZ();
+	quat_msg.x = 0;
+	quat_msg.y = 0;
+	quat_msg.z = 0;
+	quat_msg.w = 1;
+	group.setApproximateJointValueTarget(fixed_pose);
+//	group.setApproximateJointValueTarget(final_transform); // changed for the terabot arm ( the previous setPoseTarget does not work)
+	
         bool good_plan=group.plan(my_plan);
 
         if(good_plan)
         {
-            ROS_INFO("GOOD PLAN");
+            ROS_INFO("GOOD PLAN 1");
             //group.asyncExecute(my_plan);
             chosen_grip=grip_list.grip_states[i];
             print_grip((int)chosen_grip.grip_pose.direction.id);
@@ -112,24 +127,27 @@ void GraspPlanningAction::goalCB()
         }
         else
         {
-            ROS_INFO("BAD PLAN");
+            ROS_INFO("BAD PLAN 1");
         }
     }
-
-    bool success=group.execute(my_plan);
-
-    if(!success)
-    {
-        ROS_INFO("FAILED MOVING...");
-        as_.setAborted();
-        return;
-    }
+    
+    group.move();
+    ROS_INFO("After Move 1");
+//     bool success=group.execute(my_plan);
+    sleep(30.0);
+//     if(!success)
+//     {
+//         ROS_INFO("FAILED MOVING...");
+//         as_.setAborted();
+//         return;
+//     }
 
     ///////////////////
     // Close Gripper //
     ///////////////////
+    
 
-    std_srvs::Empty srv;
+    std_srvs::Empty srv;//*****************************************commented (Different gripper is used for the terabot arm)*************************
     if (!close_gripper_client.call(srv))
     {
         as_.setAborted(result_);
@@ -153,49 +171,56 @@ void GraspPlanningAction::goalCB()
       sleep_t.sleep();
     }
 
-
+    ROS_INFO("After Move 1.1");
 
     moveit_msgs::AttachedCollisionObject attached_object;
-    attached_object.link_name = "finger_1";
-    attached_object.object.header.frame_id = "finger_1";
+    attached_object.link_name = "gripper_l_finger_link";// was finger_1
+    attached_object.object.header.frame_id = "gripper_l_finger_link";// was finger_1
     attached_object.object=collision_objects[0];
     attached_object_publisher.publish(attached_object);
+  
+    ROS_INFO("After Move 1.2");
 
     ///////////////////////////////////
-    // Goto predefined last position //
+    // Goto predefined last position // 
     ///////////////////////////////////
+    
+     //*************************** "change the pre grasp location where the object is the located" ******************************//
 
-    Eigen::Affine3d transformation;
-    Eigen::Vector3d p(0.0216893, -0.414892, 0.341879);
-    Eigen::Quaterniond quaternion(-0.00290399, 0.7214, -0.00289372, 0.692506);
-    transformation = Eigen::Translation3d(p) * quaternion;
-    group.setPoseTarget(transformation);
-    good_plan=group.plan(my_plan);
-
-    if(good_plan)
-    {
-        group.execute(my_plan);
-        ROS_INFO("GOOD PLAN!!!!");
-    }
-    else
-    {
-        ROS_INFO("BAD PLAN");
-    }
-
-    sleep(6.0);
-
-    ///////////////////////////////
-    // Drop object: Open Gripper //
-    ///////////////////////////////
-
-    if (!open_gripper_client.call(srv))
-    {
-        as_.setAborted(result_);
-    }
-    else
-    {
-        as_.setSucceeded(result_);
-    }
+//     Eigen::Affine3d transformation;
+//     Eigen::Vector3d p(0.0216893, -0.414892, 0.341879);
+//     Eigen::Quaterniond quaternion(-0.00290399, 0.7214, -0.00289372, 0.692506);
+//     transformation = Eigen::Translation3d(p) * quaternion;
+//     // group.setPoseTarget(transformation);
+//     group.setApproximateJointValueTarget(transformation); // changed for the terabot arm ( the previous setPoseTarget does not work)
+//     good_plan=group.plan(my_plan);
+//     
+//     ROS_INFO("After Move 1.3");
+// 
+//     if(good_plan)
+//     {
+//         group.execute(my_plan);
+//         ROS_INFO("GOOD PLAN 2!!!!");
+//     }
+//     else
+//     {
+//         ROS_INFO("BAD PLAN 2");
+//     }
+// 
+//     sleep(6.0);
+// 
+//     ///////////////////////////////
+//     // Drop object: Open Gripper //
+//     ///////////////////////////////
+// 
+//     if (!open_gripper_client.call(srv))
+//     {
+//         as_.setAborted(result_);
+//     }
+//     else
+//     {
+//         as_.setSucceeded(result_);
+//     }
 
     attached_object.object.operation = attached_object.object.REMOVE;
     attached_object_publisher.publish(attached_object);
@@ -250,7 +275,7 @@ bool GraspPlanningAction::objectsToCollisionEnvironment(ist_grasp_generation_msg
     //        }
 
     collision_objects.clear();
-    std::string brain_frame_id="base_link";
+    std::string brain_frame_id="base_link"; // it was "base_link"
 
     int box_index=0;
     // For each object

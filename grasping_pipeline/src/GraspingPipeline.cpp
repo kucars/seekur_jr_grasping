@@ -22,27 +22,30 @@ void GraspingPipelineAction::executeCB(const ist_grasp_generation_msgs::Grasping
     actionlib::SimpleActionClient<perception_msgs::DetectObjectsAction> detect_objects("detect_objects_server", true);
 
     ROS_INFO("Waiting for object detection action server to start.");
+    
+    ROS_INFO("Before detect objects.waitforserver.");
     // wait for the action server to start
     detect_objects.waitForServer(); //will wait for infinite time
+    ROS_INFO("After detect objects.waitforserver.");
 
     // send a goal to the action
     perception_msgs::DetectObjectsGoal object_detection_goal;
-
-    object_detection_goal.table_region.x_filter_min = 0.4;
-    object_detection_goal.table_region.x_filter_max = 1.0;
-    object_detection_goal.table_region.y_filter_min =-0.4;
-    object_detection_goal.table_region.y_filter_max = 0.4;
-    object_detection_goal.table_region.z_filter_min =-0.1;
+    ROS_INFO("After perceptionmsgs detect object goals");
+    object_detection_goal.table_region.x_filter_min = 0.8;
+    object_detection_goal.table_region.x_filter_max = 2.0;
+    object_detection_goal.table_region.y_filter_min =-0.5;
+    object_detection_goal.table_region.y_filter_max = 0.5;
+    object_detection_goal.table_region.z_filter_min =-0.5;
     object_detection_goal.table_region.z_filter_max = 0.3;
 
     detect_objects.sendGoal(object_detection_goal);
-
+    ROS_INFO("After detect object send goals");
     //wait for the action to return
-    bool finished_before_timeout = detect_objects.waitForResult(ros::Duration(60.0));
+    bool finished_before_timeout = detect_objects.waitForResult(ros::Duration(180.0));
 
     if(!finished_before_timeout)
     {
-        ROS_INFO("Action did not finish before the time out.");
+        ROS_INFO("Action did not finish before the time out. 1 server");
         as_.setAborted();
         success = false;
         return;
@@ -77,7 +80,7 @@ void GraspingPipelineAction::executeCB(const ist_grasp_generation_msgs::Grasping
     generate_grasps.sendGoal(objects);
 
     //wait for the action to return
-    finished_before_timeout = detect_objects.waitForResult(ros::Duration(30.0));
+    finished_before_timeout = detect_objects.waitForResult(ros::Duration(180.0));//was 30 seconds
 
     if(finished_before_timeout)
     {
@@ -86,7 +89,7 @@ void GraspingPipelineAction::executeCB(const ist_grasp_generation_msgs::Grasping
     }
     else
     {
-        ROS_INFO("Action did not finish before the time out.");
+        ROS_INFO("Action did not finish before the time out.2 server");
         as_.setPreempted();
         success = false;
     }
