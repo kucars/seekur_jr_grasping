@@ -93,13 +93,13 @@ void GraspPlanningAction::goalCB()
 
         Eigen::Affine3d final_transform = transform_object_eigen*transform_grip_eigen*transform_end_effector_to_wrist;
 
-        static tf::TransformBroadcaster br;
+//         static tf::TransformBroadcaster br;
         tf::Transform transform;
-        transform.setOrigin( tf::Vector3(final_transform.translation().x(), final_transform.translation().y(), final_transform.translation().z()) );
-        tf::Quaternion q;
-        q.setRPY(0, 0, 0);
-        transform.setRotation(q);
-        br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "base_link", "gripper_pose"));
+//         transform.setOrigin( tf::Vector3(final_transform.translation().x(), final_transform.translation().y(), final_transform.translation().z()) );
+         tf::Quaternion q;
+         q.setRPY(0, 0, 0);
+         transform.setRotation(q);
+//         br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "base_link", "gripper_pose"));
 
         //std::cout << final_transform.matrix() << std::endl;
         //group.setPoseTarget(final_transform);
@@ -108,13 +108,15 @@ void GraspPlanningAction::goalCB()
 	fixed_pose.position.x = transform.getOrigin().getX()-0.09;
         fixed_pose.position.y =  transform.getOrigin().getY();
         fixed_pose.position.z =  transform.getOrigin().getZ();
-	quat_msg.x = 0;
-	quat_msg.y = 0;
-	quat_msg.z = 0;
-	quat_msg.w = 1;
+// 	quat_msg.x = 0;
+// 	quat_msg.y = 0;
+// 	quat_msg.z = 0;
+// 	quat_msg.w = 1;
+// 	
+// 	fixed_pose.orientation = quat_msg;
 	group.setApproximateJointValueTarget(fixed_pose);
 //	group.setApproximateJointValueTarget(final_transform); // changed for the terabot arm ( the previous setPoseTarget does not work)
-	
+	 group.move();
         bool good_plan=group.plan(my_plan);
 
         if(good_plan)
@@ -131,7 +133,7 @@ void GraspPlanningAction::goalCB()
         }
     }
     
-    group.move();
+   // group.move();
     ROS_INFO("After Move 1");
 //     bool success=group.execute(my_plan);
     sleep(30.0);
